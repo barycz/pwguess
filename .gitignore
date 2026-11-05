@@ -1,0 +1,7 @@
+# Downloaded by fetch_data.py (third-party wordlists and hashcat rule files)
+data/
+rules/
+
+# Python
+__pycache__/
+*.pyc

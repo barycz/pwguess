@@ -172,3 +172,63 @@ benchmark modes.
 - `pwguess.py`: estimator (stdlib only, Python 3.8+)
 - `hcrules.py`: hashcat/JtR rule-language engine
 - `fetch_data.py`: one-time downloader, the only code that touches the network
+
+## References
+
+Every attack here is a reimplementation or an estimator of a published method or a
+real cracking tool. Nothing was invented for this project.
+
+### Methodology
+
+- **min_auto (take the minimum over all attacks).** B. Ur et al., *Measuring
+  Real-World Accuracies and Biases in Modeling Password Guessability*, USENIX
+  Security 2015. Shows that the minimum guess number across several automated
+  approaches tracks professional cracking teams.
+- **Monte Carlo guess-number estimation** (used for PCFG and Markov). M. Dell'Amico
+  and M. Filippone, *Monte Carlo Strength Evaluation: Fast and Reliable Password
+  Checking*, ACM CCS 2015. Estimates a password's rank in a probability-ordered
+  enumeration without enumerating it.
+
+### Attacks and the tools they model
+
+- **Dictionary, rules, masks, hybrid** — hashcat (`-a 0/-r`, `-a 3`, `-a 6/-a 7`),
+  https://hashcat.net . The rule language is implemented in `hcrules.py` per the
+  hashcat rule-based attack wiki (https://hashcat.net/wiki/doku.php?id=rule_based_attack),
+  which is shared with John the Ripper's wordlist rules.
+- **Mask ordering** — PACK (Password Analysis and Cracking Kit) `statsgen` /
+  `maskgen` / `policygen` by P. Petrović (iphelix),
+  https://github.com/iphelix/pack . Masks are ordered by "optindex" (hits divided
+  by keyspace), as maskgen does.
+- **Combinator / PRINCE** — hashcat `-a 1` and princeprocessor,
+  https://github.com/hashcat/princeprocessor .
+- **Keyboard walks** — kwprocessor, https://github.com/hashcat/kwprocessor .
+- **PCFG** — M. Weir, S. Aggarwal, B. de Medeiros, B. Glodek, *Password Cracking
+  Using Probabilistic Context-Free Grammars*, IEEE S&P 2009; reference
+  implementation pcfg_cracker by M. Weir, https://github.com/lakiw/pcfg_cracker .
+  Letter-segment smoothing uses Witten-Bell back-off (Witten & Bell, 1991).
+- **Markov** — A. Narayanan and V. Shmatikov, *Fast Dictionary Attacks on Passwords
+  Using Time-Space Tradeoff*, ACM CCS 2005; and OMEN: M. Dürmuth, F. Angelstorf,
+  C. Castelluccia, D. Perito, A. Chaabane, *OMEN: Faster Password Guessing Using an
+  Ordered Markov Enumerator*, ESSoS 2015. Also realized as John the Ripper's
+  `--incremental` mode and hashcat's `--markov` / `.hcstat2`.
+
+### Data
+
+- **Leaked-password list** — SecLists `xato-net-10-million-passwords-1000000.txt`,
+  D. Miessler et al., https://github.com/danielmiessler/SecLists (originally
+  compiled by M. Burnett).
+- **Word-frequency lists** — FrequencyWords (`en_50k.txt`, `cs_50k.txt`) by
+  H. Dave, https://github.com/hermitdave/FrequencyWords , built from OpenSubtitles.
+- **Rule files** — hashcat's `best66`, `leetspeak`, `rockyou-30000`, `dive`,
+  https://github.com/hashcat/hashcat/tree/master/rules .
+
+### Speeds (crack-time tables)
+
+- **GPU benchmark** — hashcat v6.2.6 on an NVIDIA RTX 4090, from Chick3nman's public
+  benchmark, https://gist.github.com/Chick3nman/32e662a5bb63bc4f51b847bb422222fd .
+- **SSH key KDFs** — new OpenSSH format uses `bcrypt_pbkdf` (OpenSSH, D. J. Bernstein
+  / C. Percival lineage); legacy PEM uses OpenSSL `EVP_BytesToKey` (one pass of MD5);
+  PKCS#8 uses PBKDF2 (RFC 8018). SSH key hashcat modes 22911-22951.
+- **Kerberos** — encryption types per RFC 3961 and RFC 4757 (RC4-HMAC); Kerberoasting
+  via hashcat modes 13100 (etype 23), 19600/19700 (etype 17/18), AS-REP roasting via
+  18200/19800/19900.

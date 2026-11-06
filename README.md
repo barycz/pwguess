@@ -98,6 +98,25 @@ symbol), leetspeak, and keyboard walks.
 You can swap in bigger lists, e.g. rockyou (14M) as `data/passwords.txt` or another
 `.rule` file named in `RULE_FILES`. The cache rebuilds by itself when they change.
 
+## SSH private-key passphrases
+
+The report ends with a short table showing how long the best-guess number would take
+if the password protected an SSH private key, for each on-disk key format. It never
+reads a key; it only applies each format's key-derivation function (KDF) to the guess
+number. The format is in the key's first line (`-----BEGIN ... PRIVATE KEY-----`):
+
+| Banner | KDF | Speed on one 4090 | Verdict |
+|---|---|---|---|
+| `OPENSSH PRIVATE KEY` | bcrypt_pbkdf, 16 rounds | ~5.7 kH/s (est.) | slow — good |
+| `ENCRYPTED PRIVATE KEY` (PKCS#8) | PBKDF2-HMAC-SHA256 | ~5 MH/s at 2048 iters (est.) | depends on iteration count |
+| `RSA PRIVATE KEY` + `DEK-Info` (legacy PEM) | one pass of MD5 | 4.4 GH/s (`hashcat -m 22911`) | near-nonexistent — bad |
+
+Same passphrase, up to ~6 orders of magnitude apart. The modern OpenSSH format
+(`ssh-keygen` default since OpenSSH 7.8, tunable with `-a <rounds>`) is the one to use;
+convert an old key with `ssh-keygen -p -o -f <key>`. The bcrypt and PKCS#8 rows are
+estimates derived from hashcat's bcrypt and SHA-256 benchmarks at the stated KDF
+settings; the legacy row is a measured hashcat mode.
+
 ## Limitations and how to read the numbers
 
 - **min_auto is optimistic for the attacker.** It assumes they run the attack that

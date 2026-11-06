@@ -856,6 +856,22 @@ HASH_RATES = [
     ("online, 10/s", 10),
 ]
 
+# Passphrase-protected SSH private keys. The key's `-----BEGIN ...-----` banner
+# tells you the format; each uses a different KDF, so the SAME passphrase is
+# cracked at wildly different speeds. Rates are per RTX 4090.
+_BCRYPT5 = 184.0e3  # hashcat bcrypt $2*$ benchmark, cost 5 (32 iterations)
+SSH_RATES = [
+    # New OpenSSH format (default since OpenSSH 7.8): bcrypt_pbkdf. Default 16
+    # rounds ~= 1024 Blowfish key setups ~= 32x a cost-5 bcrypt op. Estimate.
+    ("new OpenSSH (bcrypt_pbkdf, 16 rounds)", _BCRYPT5 / 32, "est."),
+    # PKCS#8 'BEGIN ENCRYPTED PRIVATE KEY': PBES2 with PBKDF2. Assume
+    # HMAC-SHA256 at OpenSSL's old default of 2048 iterations. Estimate.
+    ("PKCS#8 (PBKDF2-SHA256, 2048 iters)", 21.98e9 / (2 * 2048), "est."),
+    # Legacy PEM 'BEGIN RSA PRIVATE KEY' + DEK-Info: OpenSSL EVP_BytesToKey,
+    # one pass of MD5. hashcat -m 22911 (AES-128-CBC) benchmark.
+    ("legacy PEM (MD5 KDF, 1 pass)", 4382.6e6, "hashcat -m 22911"),
+]
+
 
 def fmt_num(x):
     if x is None:
@@ -932,6 +948,12 @@ def report(m, pw, res, gpus, show_pw, verbose=False):
     for name, rate in HASH_RATES:
         r = rate * (gpus if not name.startswith("online") else 1)
         print(f"  {name:<16} {fmt_time(float(best.guesses) / r):>18}")
+    print()
+    print("If this were an SSH private-key passphrase (format is in the key's")
+    print("-----BEGIN----- banner; same passphrase, different KDF):")
+    for name, rate, src in SSH_RATES:
+        t = fmt_time(float(best.guesses) / (rate * gpus))
+        print(f"  {name:<38} {t:>18}   [{src}]")
     print()
 
 

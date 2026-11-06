@@ -19,6 +19,8 @@ FILES = [
      "Common-Credentials/xato-net-10-million-passwords-1000000.txt"),
     ("data/en_words.txt",
      "https://raw.githubusercontent.com/hermitdave/FrequencyWords/master/content/2018/en/en_50k.txt"),
+    ("data/cs_words.txt",
+     "https://raw.githubusercontent.com/hermitdave/FrequencyWords/master/content/2018/cs/cs_50k.txt"),
     ("rules/best66.rule",
      "https://raw.githubusercontent.com/hashcat/hashcat/master/rules/best66.rule"),
     ("rules/leetspeak.rule",
@@ -44,10 +46,7 @@ def main():
                 f.write(chunk)
         os.replace(dest + ".part", dest)
         print(f"         {os.path.getsize(dest):,} bytes")
-    # Invalidate trained-model cache, if any.
-    cache = os.path.join(HERE, "data", "model_cache.pkl")
-    if os.path.exists(cache):
-        os.remove(cache)
+    # Trained-model caches rebuild themselves when the data files change.
     print("done.")
 
 

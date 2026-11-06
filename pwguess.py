@@ -872,6 +872,16 @@ SSH_RATES = [
     ("legacy PEM (MD5 KDF, 1 pass)", 4382.6e6, "hashcat -m 22911"),
 ]
 
+# Active Directory service tickets (Kerberoasting / AS-REP roasting). The
+# etype decides the speed: RC4 tickets are keyed on the NT hash itself (one
+# MD4 + HMAC-MD5, essentially NTLM speed), while AES tickets add PBKDF2-
+# HMAC-SHA1 with 4096 iterations. Rates are per RTX 4090, hashcat benchmark.
+KERBEROS_RATES = [
+    ("NTLM hash (for reference)", 288.5e9, "hashcat -m 1000"),
+    ("Kerberoast RC4 (TGS-REP etype 23)", 3478.0e6, "hashcat -m 13100"),
+    ("Kerberoast AES (TGS-REP etype 18)", 2562.9e3, "hashcat -m 19700"),
+]
+
 
 def fmt_num(x):
     if x is None:
@@ -952,6 +962,12 @@ def report(m, pw, res, gpus, show_pw, verbose=False):
     print("If this were an SSH private-key passphrase (format is in the key's")
     print("-----BEGIN----- banner; same passphrase, different KDF):")
     for name, rate, src in SSH_RATES:
+        t = fmt_time(float(best.guesses) / (rate * gpus))
+        print(f"  {name:<38} {t:>18}   [{src}]")
+    print()
+    print("If this were an Active Directory account (cracked offline from a stolen")
+    print("Kerberos service ticket, i.e. Kerberoasting; AS-REP roasting is the same):")
+    for name, rate, src in KERBEROS_RATES:
         t = fmt_time(float(best.guesses) / (rate * gpus))
         print(f"  {name:<38} {t:>18}   [{src}]")
     print()

@@ -117,6 +117,28 @@ convert an old key with `ssh-keygen -p -o -f <key>`. The bcrypt and PKCS#8 rows 
 estimates derived from hashcat's bcrypt and SHA-256 benchmarks at the stated KDF
 settings; the legacy row is a measured hashcat mode.
 
+## Active Directory: NTLM vs Kerberos
+
+The report also shows how long the best-guess number would take if the password
+belonged to an Active Directory account, cracked offline from a stolen Kerberos
+service ticket (**Kerberoasting**; AS-REP roasting has the same speeds). What matters
+is the ticket's encryption type:
+
+| Target | KDF | Speed on one 4090 |
+|---|---|---|
+| NTLM hash (reference) | one MD4 | 288.5 GH/s (`-m 1000`) |
+| Kerberoast RC4 (TGS-REP etype 23) | MD4 + HMAC-MD5 | 3.5 GH/s (`-m 13100`) |
+| Kerberoast AES (TGS-REP etype 18) | PBKDF2-HMAC-SHA1, 4096 iters | 2.6 MH/s (`-m 19700`) |
+
+NTLM is the fastest hash of all — a single MD4 of the password, ~288 billion guesses
+per second. The RC4 Kerberos key **is** the NT hash, so an RC4 ticket (etype 23) is
+cracked at essentially NTLM speed, only ~80x slower for the ticket's HMAC check — still
+billions per second. An AES ticket (etype 17/18) instead runs PBKDF2 with 4096
+iterations, about 100,000x slower than NTLM. So the same weak password can be caught in
+a Kerberoast within seconds on RC4, which is why disabling RC4 (AES-only tickets) and
+using long service-account passwords both matter. All figures are measured hashcat
+benchmark modes.
+
 ## Limitations and how to read the numbers
 
 - **min_auto is optimistic for the attacker.** It assumes they run the attack that

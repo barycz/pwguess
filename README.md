@@ -4,10 +4,14 @@
 each common cracking strategy produces before it reaches that exact string. It also
 converts the best (lowest) number into time at real GPU hash rates.
 
-It is completely offline. The script turns off Python's socket module when it
-starts, reads the password without echoing it, and never writes it anywhere. It
-never computes or cracks a hash. All it asks is: *at what position would attack X
-produce this string?*
+It is completely offline. At startup the script installs a Python audit hook
+(PEP 578) that blocks every socket, DNS lookup and process launch for the rest of
+the run. It reads the password without echoing it, never writes it anywhere, and
+by default never prints it, not even in pieces. It never computes or cracks a
+hash. All it asks is: *at what position would attack X produce this string?*
+
+The audit hook guards against mistakes in this program; it is not a sandbox
+against hostile code running inside the same Python process.
 
 ## Usage
 
@@ -31,10 +35,18 @@ comes from the leaked list, not the dictionary.
 
 Options: `--lang en|cs|mixed` (which word dictionary the attacker uses, see
 below), `--fast` (skip the big rule files), `--gpus 8` (time table for a rig),
-`--show` (print the password in the report instead of masking it), `-v` (list
-every attack, including misses), `--stdin` (read one password per line from
-stdin). Piping passwords in can leave them in your shell history, so prefer the
-prompt.
+`--show` (see below), `-v` (list every attack, including misses), `--stdin`
+(read one password per line from stdin). Piping passwords in can leave them in
+your shell history, so prefer the prompt.
+
+By default the report shows only the password's length, each attack's guess
+number and the time tables. `--show` adds the password itself, its character mask,
+each attack's details (matched words, rules, segments) and the "Human patterns
+spotted" section. Those details spell the password out, so `--show` output is as
+sensitive as the password; don't paste or save it. Even without `--show`, a very
+low guess number from the Dictionary or rules attacks is a position in a public
+list, so it can point to the password itself. A password that weak should be
+changed anyway.
 
 The first run for each language trains the models (~30 s) and caches them in
 `data/model_cache_<lang>.pkl`. Later runs start in ~2 s.
@@ -82,7 +94,7 @@ Dell'Amico & Filippone (*Monte Carlo Strength Evaluation*, CCS 2015). It takes
 `Σ 1/(n·pᵢ)` over the samples that are more likely than it. This gives the
 password's position in a probability-ordered enumeration without enumerating it.
 
-The report also has a **"Human patterns spotted"** section, with leak statistics for
+With `--show`, the report also has a **"Human patterns spotted"** section, with leak statistics for
 the habits you'd expect: a capitalized first letter (about half of all capitalized
 words in leaks), years, `123`, a trailing `!` or `.` (`.` is the #2 single
 symbol), leetspeak, and keyboard walks.

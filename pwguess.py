@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """pwguess - estimate how many guesses real cracking tools would need for a password.
 
-Fully offline: the network is disabled at startup, the password is read without
-echo, never written anywhere, and no hash is ever computed or cracked. The
-program only asks "at what position would attack X produce this exact string?"
+Fully offline: an audit hook blocks all network access and process launches at
+startup, the password is read without echo, never written anywhere, and not
+printed (not even in pieces) unless --show is given. No hash is ever computed or
+cracked. The program only asks "at what position would attack X produce this
+exact string?"
 
 Attacks modelled (each estimated independently; the minimum wins, which is the
 "min_auto" methodology of Ur et al., USENIX Security 2015):
@@ -24,22 +26,26 @@ enumeration without enumerating it.
 """
 
 # ---------------------------------------------------------------------------
-# Network guard: nothing below may open a socket.
-import socket as _socket
+# Offline guard: nothing below may touch the network or start another program.
+# A runtime audit hook (PEP 578) is raised from inside the interpreter's C code,
+# so it catches every socket created, every DNS lookup (getaddrinfo,
+# gethostbyname, ...) and every process launch, including calls made through the
+# raw `_socket` module. Once added, an audit hook cannot be removed. This guards
+# against mistakes in this program and its imports; it is not a sandbox against
+# hostile code running in the same process.
+import sys as _sys
+
+_BLOCKED_EVENTS = ("socket.", "subprocess.Popen", "os.system", "os.exec", "os.spawn",
+                   "os.posix_spawn", "os.startfile", "webbrowser.open")
 
 
-def _no_network(*_a, **_k):
-    raise RuntimeError("pwguess: network access is disabled in this program")
+def _offline_guard(event, _args):
+    if event.startswith(_BLOCKED_EVENTS):
+        raise RuntimeError(f"pwguess: blocked {event} - this program never uses the "
+                           f"network or starts other programs")
 
 
-class _NoSocket(_socket.socket):
-    def __init__(self, *_a, **_k):
-        _no_network()
-
-
-_socket.socket = _NoSocket
-_socket.create_connection = _no_network
-_socket.getaddrinfo = _no_network
+_sys.addaudithook(_offline_guard)
 # ---------------------------------------------------------------------------
 
 import argparse
@@ -917,12 +923,18 @@ def verdict(lg):
 
 
 def report(m, pw, res, gpus, show_pw, verbose=False):
+    """Print the report. Without show_pw it prints no text taken from the password:
+    no characters, no mask, and none of the per-attack details or human patterns,
+    because those name the matched words, rules and segments and so spell the
+    password out. Only its length, the guess numbers and the time tables remain."""
     found = [r for r in res if r.guesses is not None]
     best = min(found, key=lambda r: r.guesses)
-    shown = pw if show_pw else (pw[0] + "*" * (len(pw) - 2) + pw[-1] if len(pw) > 2 else "*" * len(pw))
-    mk = mask_of(pw)
     print()
-    print(f"Password  {shown}   length {len(pw)}   mask {hc_mask(mk)}   words: {m.word_label}")
+    if show_pw:
+        print(f"Password  {pw}   length {len(pw)}   mask {hc_mask(mask_of(pw))}   "
+              f"words: {m.word_label}")
+    else:
+        print(f"Password  {'*' * len(pw)}   length {len(pw)}   words: {m.word_label}")
     print()
     print(f"  {'attack':<18} {'guesses':>10}  {'log10':>5}  tool / how")
     print("  " + "-" * 92)
@@ -933,7 +945,8 @@ def report(m, pw, res, gpus, show_pw, verbose=False):
         lg = f"{math.log10(max(r.guesses, 1)):5.1f}"
         mark = "*" if r is best else " "
         print(f"{mark} {r.attack:<18} {fmt_num(r.guesses):>10}  {lg}  {r.tool}")
-        print(f"  {'':<18} {'':>10}         {r.detail}")
+        if show_pw:
+            print(f"  {'':<18} {'':>10}         {r.detail}")
     missed = [r for r in res if r.guesses is None]
     never = sorted({r.attack for r in missed
                     if all(o.guesses is None for o in res if o.attack == r.attack)},
@@ -944,12 +957,16 @@ def report(m, pw, res, gpus, show_pw, verbose=False):
             print("  never produced by: " + ", ".join(never))
         if verbose:
             for r in missed:
-                print(f"    {r.tool}: {r.detail}")
+                print(f"    {r.tool}" + (f": {r.detail}" if show_pw else ""))
     lg = math.log10(max(best.guesses, 1))
     print()
-    print("Human patterns spotted:")
-    for line in human_patterns(m, pw, res):
-        print(f"  - {line}")
+    if show_pw:
+        print("Human patterns spotted:")
+        for line in human_patterns(m, pw, res):
+            print(f"  - {line}")
+    else:
+        print("Details hidden: they name the words, rules and characters each attack")
+        print("matched, which spells out the password. Rerun with --show to see them.")
     print()
     print(f"Estimated guesses: {fmt_num(best.guesses)} (10^{lg:.1f}) via {best.attack}  [{best.tool}]")
     print(f"Verdict: {verdict(lg)}")
@@ -1132,7 +1149,9 @@ def main():
     ap.add_argument("--stdin", action="store_true", help="read one password per line from stdin")
     ap.add_argument("--fast", action="store_true", help="skip the big rule files (rockyou-30000, dive)")
     ap.add_argument("--gpus", type=int, default=1, help="number of RTX-4090-class GPUs for the time table")
-    ap.add_argument("--show", action="store_true", help="print the password itself in the report")
+    ap.add_argument("--show", action="store_true",
+                    help="print the password, its mask, and each attack's details and the human "
+                         "patterns (these name the matched words and characters)")
     ap.add_argument("-v", "--verbose", action="store_true", help="list every attack, including misses")
     args = ap.parse_args()
 
